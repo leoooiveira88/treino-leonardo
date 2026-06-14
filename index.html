@@ -115,6 +115,10 @@
   /* TIP BOX */
   .tip-box { margin: 0 20px 10px; background: var(--surface2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12px; color: var(--muted); line-height: 1.6; }
   .tip-box strong { color: var(--text); }
+  .tip-box summary { cursor: pointer; list-style: none; color: var(--text); }
+  .tip-box summary::-webkit-details-marker { display: none; }
+  .tip-box summary::after { content: ' ▾'; color: var(--accent); }
+  .tip-box[open] summary::after { content: ' ▴'; }
 
   /* HISTORY MODAL */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; padding: 20px; overflow-y: auto; }
@@ -230,7 +234,7 @@
 <div class="week-progress-wrap">
   <div class="week-progress-label">
     <span>Semana atual</span>
-    <span id="weekLabel">0/5 treinos</span>
+    <span id="weekLabel">0/7 dias</span>
   </div>
   <div class="week-progress-track">
     <div class="week-progress-fill" id="weekFill" style="width:0%"></div>
@@ -285,7 +289,9 @@
 // ══════════════════════════════════════════════
 //  DATA
 // ══════════════════════════════════════════════
-const SCHEDULE = { 0:null, 1:'A', 2:'B', 3:'C', 4:null, 5:'D', 6:'E' };
+const SCHEDULE = { 0:'E', 1:null, 2:'A', 3:'B', 4:null, 5:'C', 6:'D' };
+const TRAINING_DAYS = [2,3,5,6,0]; // Ter, Qua, Sex, Sab, Dom
+const ABS_DAYS = [2,5,0]; // dia sim: Ter, Sex, Dom (alternado)
 
 // Ícones por grupo muscular
 const GROUP_ICONS = {
@@ -496,9 +502,15 @@ function setSerieData(exId, serie, field, value) {
   const k = exId + '_' + serie;
   if (!state[k]) state[k] = {};
   state[k][field] = value;
+  state[k].date = todayISO();
   saveState();
 }
 function getSerieData(exId, serie) { return state[exId + '_' + serie] || {}; }
+function todayISO() { return new Date().toISOString().slice(0,10); }
+function formatDateBR(iso) {
+  const [y,m,d] = iso.split('-');
+  return d + '/' + m + '/' + y;
+}
 
 // ══════════════════════════════════════════════
 //  RENDER
@@ -523,7 +535,7 @@ function renderWeekBar() {
     const chip = document.createElement('div');
     chip.className = 'day-chip' + (dow === currentDay ? ' active' : '') + (!training ? ' rest' : '');
     chip.innerHTML = DAY_NAMES[dow] + (training ? '<br><small>' + training + '</small>' : '<br><small>Descanso</small>');
-    if (training && isDayDone(dow)) chip.innerHTML += '<span class="dot"></span>';
+    if (isDayDone(dow)) chip.innerHTML += '<span class="dot"></span>';
     chip.onclick = () => switchDay(dow);
     bar.appendChild(chip);
   });
@@ -531,14 +543,19 @@ function renderWeekBar() {
 
 function isDayDone(dow) {
   const t = SCHEDULE[dow];
-  if (!t) return false;
-  return TREINOS[t].exercises.every(e => {
+  const cardioDone = !!state['cardio_' + dow];
+  if (!t) {
+    // Rest day: only cardio defines completion
+    return cardioDone;
+  }
+  const exDone = TREINOS[t].exercises.every(e => {
     for (let s = 1; s <= e.sets; s++) { if (!getSerieData(e.id, s).done) return false; }
     return true;
   });
+  return exDone && cardioDone;
 }
 
-function countDoneDays() { return [1,2,3,5,6].filter(d => isDayDone(d)).length; }
+function countDoneDays() { return [0,1,2,3,4,5,6].filter(d => isDayDone(d)).length; }
 
 function switchDay(dow) {
   currentDay = dow;
@@ -549,7 +566,7 @@ function switchDay(dow) {
 function getAllExForDay(dow) {
   const t = SCHEDULE[dow];
   if (!t) return [];
-  const doAbs = [1,3,5].includes(dow);
+  const doAbs = ABS_DAYS.includes(dow);
   return TREINOS[t].exercises.concat(doAbs ? AB_EXERCISES : []);
 }
 
@@ -560,10 +577,10 @@ function renderContent(dow) {
   if (!training) {
     document.getElementById('todayTitle').textContent = '— Descanso —';
     document.getElementById('todayFocus').textContent = 'Recuperação ativa. Você merece!';
-    document.getElementById('todayPct').textContent = '💤';
-    updateWeekProgress();
     content.innerHTML = '<div class="rest-screen"><div class="rest-icon">🛌</div><div class="rest-title">Dia de Descanso</div><div class="rest-sub">Recuperação é parte do treino.<br>Hidrate-se bem e descanse!</div></div>'
-      + buildCardioCard(60);
+      + buildCardioCard(60, dow);
+    document.getElementById('todayPct').textContent = state['cardio_'+dow] ? '100%' : '0%';
+    updateWeekProgress();
     return;
   }
 
@@ -572,20 +589,21 @@ function renderContent(dow) {
   document.getElementById('todayFocus').textContent = treino.focus;
 
   const maxRep = treino.exercises[0]?.reps?.split('–')[1] || '8';
-  let html = '<div class="tip-box"><strong>📐 Progressão:</strong> Tente manter o mesmo nº de reps nas séries. Só suba a carga na próxima semana se atingir o teto máximo (' + maxRep + ' reps) em todas as séries. O ✓ de cada série inicia o timer de descanso automaticamente.</div>';
+  let html = '<details class="tip-box"><summary><strong>📐 Progressão</strong> (toque para ver)</summary>' +
+    '<div style="margin-top:8px">Tente manter o mesmo nº de reps nas séries. Só suba a carga na próxima semana se atingir o teto máximo (' + maxRep + ' reps) em todas as séries. O ✓ de cada série inicia o timer de descanso automaticamente.</div></details>';
   html += '<div class="section-label">Exercícios</div>';
   treino.exercises.forEach((ex, idx) => { html += buildExCard(ex, idx + 1); });
 
-  const doAbs = [1,3,5].includes(dow);
+  const doAbs = ABS_DAYS.includes(dow);
   if (doAbs) {
     html += '<div class="section-label">🔥 Abdominal (dia sim)</div>';
     AB_EXERCISES.forEach((ex, idx) => { html += buildExCard(ex, idx + 1); });
   }
 
-  html += buildCardioCard(45);
+  html += buildCardioCard(45, dow);
 
   content.innerHTML = html;
-  updateDayProgress(getAllExForDay(dow));
+  updateDayProgress(getAllExForDay(dow), dow);
   updateWeekProgress();
 }
 
@@ -628,24 +646,24 @@ function buildExCard(ex, num) {
   '</div>';
 }
 
-function buildCardioCard(minutes) {
-  const k = 'cardio_' + minutes;
+function buildCardioCard(minutes, dow) {
+  const k = 'cardio_' + dow;
   const done = !!state[k];
   return '<div class="section-label">🏃 Cardio</div>' +
     '<div class="ex-card cardio-card ' + (done ? 'completed' : '') + '" id="card_cardio">' +
-      '<div class="ex-header" onclick="toggleCardio(' + minutes + ')" style="cursor:pointer">' +
+      '<div class="ex-header" onclick="toggleCardio(' + dow + ')" style="cursor:pointer">' +
         '<div class="ex-num">' + (done ? '✓' : '🏃') + '</div>' +
         '<div class="ex-info">' +
           '<div class="ex-name">Cardio — ' + minutes + ' minutos</div>' +
           '<div class="ex-meta">Esteira, bike ou elíptico, em ritmo constante.</div>' +
         '</div>' +
-        '<button class="check-btn ' + (done ? 'done' : '') + '" id="chk_cardio" onclick="event.stopPropagation();toggleCardio(' + minutes + ')">✓</button>' +
+        '<button class="check-btn ' + (done ? 'done' : '') + '" id="chk_cardio" onclick="event.stopPropagation();toggleCardio(' + dow + ')">✓</button>' +
       '</div>' +
     '</div>';
 }
 
-function toggleCardio(minutes) {
-  const k = 'cardio_' + minutes;
+function toggleCardio(dow) {
+  const k = 'cardio_' + dow;
   state[k] = !state[k];
   saveState();
   const card = document.getElementById('card_cardio');
@@ -654,6 +672,15 @@ function toggleCardio(minutes) {
   card?.classList.toggle('completed', !!state[k]);
   chk?.classList.toggle('done', !!state[k]);
   if (num) num.textContent = state[k] ? '✓' : '🏃';
+
+  // Update day %, week bar/progress
+  if (SCHEDULE[currentDay]) {
+    updateDayProgress(getAllExForDay(currentDay), currentDay);
+  } else {
+    document.getElementById('todayPct').textContent = state[k] ? '100%' : '0%';
+  }
+  updateWeekProgress();
+  renderWeekBar();
 }
 
 function buildSeriesRows(ex) {
@@ -711,7 +738,7 @@ function toggleSerieDone(exId, serie) {
   refreshPips(exId);
   refreshCardDone(exId);
   refreshProgBadge(exId);
-  updateDayProgress(getAllExForDay(currentDay));
+  updateDayProgress(getAllExForDay(currentDay), currentDay);
   updateWeekProgress();
   renderWeekBar();
 
@@ -770,16 +797,19 @@ function refreshProgBadge(exId) {
 function saveWarmup(exId, val) { state['w_'+exId] = val; saveState(); }
 function saveNote(exId, val) { state['note_'+exId] = val; saveState(); }
 
-function updateDayProgress(exercises) {
+function updateDayProgress(exercises, dow) {
   let done = 0, total = 0;
   exercises.forEach(ex => { total += ex.sets; done += countSeriesDone(ex); });
+  // Cardio counts as +1 unit toward the day's total
+  total += 1;
+  if (state['cardio_' + (dow !== undefined ? dow : currentDay)]) done += 1;
   document.getElementById('todayPct').textContent = (total > 0 ? Math.round(done/total*100) : 0) + '%';
 }
 
 function updateWeekProgress() {
   const done = countDoneDays();
-  document.getElementById('weekLabel').textContent = done+'/5 treinos';
-  document.getElementById('weekFill').style.width = (done/5*100)+'%';
+  document.getElementById('weekLabel').textContent = done+'/7 dias';
+  document.getElementById('weekFill').style.width = (done/7*100)+'%';
 }
 
 // ══════════════════════════════════════════════
@@ -808,7 +838,18 @@ function openHistory() {
           return false;
         });
         if (!hasData) return;
-        html += '<div class="hist-entry"><div class="hist-date">'+data.label+' — '+data.focus+'</div>';
+
+        // Find the most recent date among this training's exercises
+        let latestDate = null;
+        data.exercises.forEach(ex => {
+          for (let s = 1; s <= ex.sets; s++) {
+            const d = wData[ex.id+'_'+s];
+            if (d?.date && (!latestDate || d.date > latestDate)) latestDate = d.date;
+          }
+        });
+        const dateLabel = latestDate ? formatDateBR(latestDate) : '';
+
+        html += '<div class="hist-entry"><div class="hist-date">'+data.label+' — '+data.focus + (dateLabel ? ' · 📅 '+dateLabel : '') + '</div>';
         data.exercises.forEach(ex => {
           const lines = [];
           for (let s = 1; s <= ex.sets; s++) {
