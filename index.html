@@ -129,6 +129,31 @@
   .hist-entry { border-bottom: 1px solid var(--border); padding: 10px 0; font-size: 13px; }
   .hist-date { font-size: 10px; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
 
+  .hist-week { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .hist-week-summary {
+    cursor: pointer; list-style: none; padding: 12px 14px;
+    font-size: 13px; color: var(--accent); font-weight: 800;
+    background: var(--surface2);
+  }
+  .hist-week-summary::-webkit-details-marker { display: none; }
+  .hist-week-summary::after { content: ' ▾'; float: right; }
+  .hist-week[open] .hist-week-summary::after { content: ' ▴'; }
+  .hist-week-body { padding: 4px 14px 10px; }
+
+  .ref-load {
+    margin-top: 5px; font-size: 11px; font-weight: 700;
+    color: var(--accent); background: #1a1300;
+    border: 1px solid var(--accent); border-radius: 6px;
+    padding: 4px 8px; display: inline-block;
+  }
+  .ref-load-prog { color: var(--green); background: #0a1f0a; border-color: var(--green); }
+
+  .hist-note {
+    margin-top: 5px; font-size: 11px; color: var(--muted);
+    font-style: italic; background: var(--surface2);
+    border-radius: 6px; padding: 5px 8px;
+  }
+
   /* FAB */
   .fab { position: fixed; bottom: 24px; right: 20px; background: var(--accent); color: #000; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 22px; cursor: pointer; box-shadow: 0 4px 20px rgba(245,166,35,0.4); display: flex; align-items: center; justify-content: center; z-index: 99; }
   .fab:active { transform: scale(0.94); }
@@ -197,6 +222,44 @@
   }
   .timer-preset.active { border-color: var(--accent); color: var(--accent); }
   .timer-preset:active { background: var(--border); }
+
+  /* ══ CELEBRATION MODAL ══ */
+  .celeb-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 400;
+    align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .celeb-overlay.open { display: flex; }
+  .celeb-card {
+    background: linear-gradient(160deg, #1a1300 0%, #0d0d0d 70%);
+    border: 1.5px solid var(--accent);
+    border-radius: 20px;
+    padding: 36px 28px;
+    text-align: center;
+    max-width: 340px;
+    width: 100%;
+    box-shadow: 0 0 50px rgba(245,166,35,0.25);
+    animation: celebPop 0.35s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes celebPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .celeb-emoji { font-size: 64px; margin-bottom: 8px; }
+  .celeb-title { font-size: 24px; font-weight: 900; color: var(--text); margin-bottom: 6px; }
+  .celeb-sub { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+  .celeb-badge {
+    display: inline-block; font-size: 11px; font-weight: 800;
+    color: #000; background: var(--accent);
+    letter-spacing: 2px; border-radius: 20px;
+    padding: 6px 18px; margin-bottom: 24px;
+  }
+  .celeb-btns { display: flex; flex-direction: column; gap: 10px; }
+  .celeb-btn { border: none; border-radius: 30px; padding: 14px; font-size: 15px; font-weight: 800; cursor: pointer; }
+  .celeb-btn-share { background: var(--accent); color: #000; }
+  .celeb-btn-share:active { opacity: 0.85; }
+  .celeb-btn-close { background: none; color: var(--muted); border: 1px solid var(--border); }
+  .celeb-btn-close:active { background: var(--surface2); }
 
   .hidden { display: none !important; }
 </style>
@@ -282,6 +345,20 @@
     <button class="timer-btn timer-btn-add" onclick="addTimerSeconds(30)">+30s</button>
     <button class="timer-btn timer-btn-skip" onclick="skipTimer()">Pular ⏭</button>
     <button class="timer-btn timer-btn-stop" onclick="stopTimer()">✕</button>
+  </div>
+</div>
+
+<!-- CELEBRATION MODAL -->
+<div class="celeb-overlay" id="celebOverlay">
+  <div class="celeb-card" id="celebCard">
+    <div class="celeb-emoji">🏆</div>
+    <div class="celeb-title">Treino Concluído!</div>
+    <div class="celeb-sub" id="celebSub">Mais um dia de evolução, Leonardo!</div>
+    <div class="celeb-badge" id="celebBadge">KV COACH</div>
+    <div class="celeb-btns">
+      <button class="celeb-btn celeb-btn-share" onclick="shareCelebration()">📤 Compartilhar no Story</button>
+      <button class="celeb-btn celeb-btn-close" onclick="closeCelebration()">Fechar</button>
+    </div>
   </div>
 </div>
 
@@ -492,7 +569,7 @@ const WEEK_KEY = () => {
   const day = now.getDay();
   const monday = new Date(now);
   monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-  return 'week_' + monday.toISOString().slice(0,10);
+  return 'week_' + localISODate(monday);
 };
 
 function storageKey() { return 'treino_leo_' + WEEK_KEY(); }
@@ -506,7 +583,16 @@ function setSerieData(exId, serie, field, value) {
   saveState();
 }
 function getSerieData(exId, serie) { return state[exId + '_' + serie] || {}; }
-function todayISO() { return new Date().toISOString().slice(0,10); }
+
+// Retorna a data no formato YYYY-MM-DD usando o horário LOCAL do dispositivo
+// (toISOString() usa UTC e "vira o dia" errado para fusos negativos como o do Brasil)
+function localISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+function todayISO() { return localISODate(new Date()); }
 function formatDateBR(iso) {
   const [y,m,d] = iso.split('-');
   return d + '/' + m + '/' + y;
@@ -552,7 +638,136 @@ function isDayDone(dow) {
     for (let s = 1; s <= e.sets; s++) { if (!getSerieData(e.id, s).done) return false; }
     return true;
   });
-  return exDone && cardioDone;
+  const absDone = ABS_DAYS.includes(dow)
+    ? getAbsForDay(dow).every(e => {
+        for (let s = 1; s <= e.sets; s++) { if (!getSerieData(e.id, s).done) return false; }
+        return true;
+      })
+    : true;
+  return exDone && absDone && cardioDone;
+}
+
+function checkDayCompletion() {
+  if (!isDayDone(currentDay)) return;
+  const celebKey = 'celebrated_' + currentDay;
+  if (state[celebKey]) return; // já celebrado hoje, não repete
+  state[celebKey] = true;
+  saveState();
+  showCelebration(currentDay);
+}
+
+function showCelebration(dow) {
+  const training = SCHEDULE[dow];
+  const sub = training
+    ? 'Você concluiu o ' + TREINOS[training].label + ' (' + TREINOS[training].focus + ')!'
+    : 'Cardio do dia de descanso completo. Recuperação em dia!';
+  document.getElementById('celebSub').textContent = sub;
+  document.getElementById('celebOverlay').classList.add('open');
+  if (navigator.vibrate) navigator.vibrate([200, 80, 200, 80, 300]);
+}
+
+function closeCelebration() {
+  document.getElementById('celebOverlay').classList.remove('open');
+}
+
+async function shareCelebration() {
+  const training = SCHEDULE[currentDay];
+  const title = training ? TREINOS[training].label : 'Cardio';
+  const text = '💪 Mais um treino concluído! ' + title + ' • KV Coach 🏆';
+
+  try {
+    const imgBlob = await generateCelebrationImage(title);
+    if (navigator.canShare && navigator.canShare({ files: [new File([imgBlob], 'treino.png', { type: 'image/png' })] })) {
+      const file = new File([imgBlob], 'treino.png', { type: 'image/png' });
+      await navigator.share({ files: [file], title: 'Treino Concluído', text: text });
+      return;
+    }
+  } catch (e) { /* fallback below */ }
+
+  // Fallback: share text only, or copy to clipboard
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Treino Concluído', text: text }); return; } catch(e) {}
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('Mensagem copiada! Cole no seu Stories do Instagram.');
+  } catch(e) {
+    alert(text);
+  }
+}
+
+// Gera uma imagem simples de celebração para compartilhar (formato story 9:16)
+function generateCelebrationImage(title) {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080; canvas.height = 1920;
+    const ctx = canvas.getContext('2d');
+
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+    grad.addColorStop(0, '#1a1300');
+    grad.addColorStop(1, '#0d0d0d');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1080, 1920);
+
+    // Accent border
+    ctx.strokeStyle = '#f5a623';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(40, 40, 1000, 1840);
+
+    ctx.textAlign = 'center';
+
+    // Logo
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 36px Arial';
+    ctx.fillText('KV COACH', 540, 260);
+
+    // Trophy emoji
+    ctx.font = '180px Arial';
+    ctx.fillText('🏆', 540, 620);
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 64px Arial';
+    ctx.fillText('TREINO', 540, 780);
+    ctx.fillText('CONCLUÍDO!', 540, 860);
+
+    // Training name
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 48px Arial';
+    wrapText(ctx, title, 540, 980, 900, 56);
+
+    // Date
+    ctx.fillStyle = '#999999';
+    ctx.font = '36px Arial';
+    const dateStr = new Date().toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long'});
+    ctx.fillText(dateStr, 540, 1700);
+
+    // Name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 44px Arial';
+    ctx.fillText('Leonardo Pereira', 540, 1780);
+
+    canvas.toBlob((blob) => resolve(blob), 'image/png');
+  });
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  let lines = [];
+  words.forEach(word => {
+    const testLine = line + word + ' ';
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      lines.push(line);
+      line = word + ' ';
+    } else {
+      line = testLine;
+    }
+  });
+  lines.push(line);
+  const startY = y - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((l, i) => ctx.fillText(l.trim(), x, startY + i * lineHeight));
 }
 
 function countDoneDays() { return [0,1,2,3,4,5,6].filter(d => isDayDone(d)).length; }
@@ -567,7 +782,13 @@ function getAllExForDay(dow) {
   const t = SCHEDULE[dow];
   if (!t) return [];
   const doAbs = ABS_DAYS.includes(dow);
-  return TREINOS[t].exercises.concat(doAbs ? AB_EXERCISES : []);
+  return TREINOS[t].exercises.concat(doAbs ? getAbsForDay(dow) : []);
+}
+
+// Gera versões dos exercícios de abdominal com ID único por dia,
+// para que marcar OK em um dia não afete outros dias com abdominal.
+function getAbsForDay(dow) {
+  return AB_EXERCISES.map(ex => Object.assign({}, ex, { id: ex.id + '_d' + dow, baseId: ex.id }));
 }
 
 function renderContent(dow) {
@@ -597,7 +818,7 @@ function renderContent(dow) {
   const doAbs = ABS_DAYS.includes(dow);
   if (doAbs) {
     html += '<div class="section-label">🔥 Abdominal (dia sim)</div>';
-    AB_EXERCISES.forEach((ex, idx) => { html += buildExCard(ex, idx + 1); });
+    getAbsForDay(dow).forEach((ex, idx) => { html += buildExCard(ex, idx + 1); });
   }
 
   html += buildCardioCard(45, dow);
@@ -681,6 +902,7 @@ function toggleCardio(dow) {
   }
   updateWeekProgress();
   renderWeekBar();
+  checkDayCompletion();
 }
 
 function buildSeriesRows(ex) {
@@ -741,6 +963,7 @@ function toggleSerieDone(exId, serie) {
   updateDayProgress(getAllExForDay(currentDay), currentDay);
   updateWeekProgress();
   renderWeekBar();
+  checkDayCompletion();
 
   // Launch timer when marking DONE (not when un-marking)
   if (newDone) {
@@ -781,7 +1004,12 @@ function refreshCardDone(exId) {
   if (card) {
     card.classList.toggle('completed', allDone);
     const num = card.querySelector('.ex-num');
-    if (num) num.textContent = allDone ? '✓' : (TREINOS[SCHEDULE[currentDay]]?.exercises.indexOf(ex)+1 || '');
+    if (num) {
+      const treinoIdx = TREINOS[SCHEDULE[currentDay]]?.exercises.indexOf(ex);
+      const absIdx = getAbsForDay(currentDay).findIndex(e => e.id === exId);
+      const displayNum = treinoIdx >= 0 ? treinoIdx + 1 : (absIdx >= 0 ? absIdx + 1 : '');
+      num.textContent = allDone ? '✓' : displayNum;
+    }
   }
 }
 
@@ -828,10 +1056,16 @@ function openHistory() {
     content.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum histórico ainda. Complete sua primeira série!</p>';
   } else {
     let html = '';
-    weeks.forEach(wk => {
+    weeks.forEach((wk, wIdx) => {
       const wData = JSON.parse(localStorage.getItem(wk) || '{}');
       const weekDate = wk.replace('treino_leo_week_','');
-      html += '<div style="margin-bottom:16px"><div style="font-size:12px;color:var(--accent);font-weight:800;margin-bottom:8px">📅 Semana de '+weekDate+'</div>';
+      const isFirst = wIdx === 0;
+
+      html += '<details class="hist-week" ' + (isFirst ? 'open' : '') + '>';
+      html += '<summary class="hist-week-summary">📅 Semana de ' + formatDateBR(weekDate) + '</summary>';
+      html += '<div class="hist-week-body">';
+
+      // ── Treinos de força ──
       Object.entries(TREINOS).forEach(([t, data]) => {
         const hasData = data.exercises.some(ex => {
           for (let s = 1; s <= ex.sets; s++) { if (wData[ex.id+'_'+s]?.kg || wData[ex.id+'_'+s]?.reps) return true; }
@@ -839,7 +1073,6 @@ function openHistory() {
         });
         if (!hasData) return;
 
-        // Find the most recent date among this training's exercises
         let latestDate = null;
         data.exercises.forEach(ex => {
           for (let s = 1; s <= ex.sets; s++) {
@@ -856,15 +1089,84 @@ function openHistory() {
             const d = wData[ex.id+'_'+s] || {};
             if (d.kg || d.reps) lines.push('S'+s+': '+(d.kg||'?')+'kg × '+(d.reps||'?'));
           }
-          if (lines.length) html += '<div style="font-size:12px;margin-top:4px"><span style="color:var(--text)">'+ex.name+'</span><br><span style="color:var(--muted)">'+lines.join(' · ')+'</span></div>';
+          if (!lines.length) return;
+
+          // Carga de referência: última série registrada com maior carga válida
+          const refKg = getReferenceLoad(ex, wData);
+          const maxRep = parseInt((ex.reps.split('–')[1]||ex.reps).toString().trim());
+          const hitMax = checkProgressionFromData(ex, wData, maxRep);
+
+          html += '<div style="font-size:12px;margin-top:6px"><span style="color:var(--text);font-weight:700">'+ex.name+'</span><br>';
+          html += '<span style="color:var(--muted)">'+lines.join(' · ')+'</span>';
+          if (refKg) {
+            html += '<div class="ref-load' + (hitMax ? ' ref-load-prog' : '') + '">';
+            html += (hitMax ? '🏆 Próxima semana: subir de ' : '📌 Referência p/ próxima semana: ') + refKg + 'kg';
+            html += '</div>';
+          }
+          const noteText = wData['note_'+ex.id];
+          if (noteText) {
+            html += '<div class="hist-note">📝 ' + noteText + '</div>';
+          }
+          html += '</div>';
         });
         html += '</div>';
       });
-      html += '</div>';
+
+      // ── Abdominal (por dia) ──
+      const absDone = [];
+      [0,1,2,3,4,5,6].forEach(dow => {
+        if (!ABS_DAYS.includes(dow)) return;
+        const hasAbs = AB_EXERCISES.some(ex => {
+          const id = ex.id + '_d' + dow;
+          for (let s = 1; s <= ex.sets; s++) { if (wData[id+'_'+s]?.done) return true; }
+          return false;
+        });
+        if (hasAbs) absDone.push(dow);
+      });
+      if (absDone.length) {
+        html += '<div class="hist-entry"><div class="hist-date">🔥 Abdominal</div>';
+        absDone.forEach(dow => {
+          html += '<div style="font-size:12px;margin-top:4px;color:var(--muted)">' + DAY_NAMES[dow] + ': completo ✓</div>';
+        });
+        html += '</div>';
+      }
+
+      // ── Cardio (por dia) ──
+      const cardioDone = [0,1,2,3,4,5,6].filter(dow => wData['cardio_'+dow]);
+      if (cardioDone.length) {
+        html += '<div class="hist-entry"><div class="hist-date">🏃 Cardio</div>';
+        cardioDone.forEach(dow => {
+          const mins = SCHEDULE[dow] ? 45 : 60;
+          html += '<div style="font-size:12px;margin-top:4px;color:var(--muted)">' + DAY_NAMES[dow] + ': ' + mins + 'min ✓</div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div></details>';
     });
     content.innerHTML = html;
   }
   document.getElementById('histModal').classList.add('open');
+}
+
+// Retorna a maior carga válida registrada para o exercício na semana (referência p/ progressão)
+function getReferenceLoad(ex, wData) {
+  let maxKg = null;
+  for (let s = 1; s <= ex.sets; s++) {
+    const d = wData[ex.id+'_'+s];
+    const kg = parseFloat(d?.kg);
+    if (!isNaN(kg) && (maxKg === null || kg > maxKg)) maxKg = kg;
+  }
+  return maxKg;
+}
+
+// Verifica se todas as séries bateram o teto de reps (mesma lógica de checkProgression, mas a partir de dados salvos)
+function checkProgressionFromData(ex, wData, maxRep) {
+  for (let s = 1; s <= ex.sets; s++) {
+    const d = wData[ex.id+'_'+s];
+    if (!d?.done || !d.reps || parseInt(d.reps) < maxRep) return false;
+  }
+  return true;
 }
 
 function closeHistory() { document.getElementById('histModal').classList.remove('open'); }
