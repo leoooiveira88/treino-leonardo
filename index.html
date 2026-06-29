@@ -295,14 +295,24 @@
   .celeb-btn-close { background: none; color: var(--muted); border: 1px solid var(--border); }
   .celeb-btn-close:active { background: var(--surface2); }
 
-  /* Chart exercise selector */
-  .chart-ex-btn {
-    display: inline-block; margin: 3px; padding: 6px 12px;
-    border: 1px solid var(--border); border-radius: 20px;
-    background: var(--surface2); color: var(--muted);
-    font-size: 12px; font-weight: 700; cursor: pointer;
+  /* Chart — lista colapsável de exercícios */
+  .chart-ex-row {
+    border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 8px; overflow: hidden;
   }
-  .chart-ex-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
+  .chart-ex-row-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; cursor: pointer; background: var(--surface2);
+    gap: 10px;
+  }
+  .chart-ex-row-header:active { background: var(--border); }
+  .chart-ex-row-name { font-size: 13px; font-weight: 700; color: var(--text); flex: 1; }
+  .chart-ex-row-treino { font-size: 10px; color: var(--accent); font-weight: 800; }
+  .chart-ex-row-chevron { color: var(--muted); font-size: 14px; transition: transform 0.2s; flex-shrink: 0; }
+  .chart-ex-row.open .chart-ex-row-chevron { transform: rotate(180deg); }
+  .chart-ex-row-body { display: none; padding: 12px; background: var(--bg); }
+  .chart-ex-row.open .chart-ex-row-body { display: block; }
+  .chart-no-data { text-align: center; color: var(--muted); font-size: 12px; padding: 12px 0; }
 
   .hidden { display: none !important; }
 </style>
@@ -366,9 +376,8 @@
 <div class="modal-overlay" id="chartModal">
   <div class="modal">
     <div class="modal-title">📈 Evolução de Carga <button class="modal-close" onclick="closeCharts()">×</button></div>
-    <div id="chartExSelect" style="margin-bottom:12px"></div>
-    <canvas id="chartCanvas" style="width:100%;border-radius:8px;background:var(--surface2)"></canvas>
-    <div id="chartEmpty" style="text-align:center;color:var(--muted);font-size:13px;padding:20px;display:none">Nenhum dado registrado ainda para este exercício.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Toque em um exercício para ver a evolução de carga semana a semana.</div>
+    <div id="chartExList"></div>
   </div>
 </div>
 
@@ -1177,7 +1186,7 @@ function openHistory() {
       html += '<div class="hist-day-body">';
 
       day.exercises.forEach(ex => {
-        if (!ex.lines.length && !ex.cardioDone && !ex.absDone) return;
+        if (!ex.isCardio && !ex.isAbs && (!ex.lines || !ex.lines.length)) return;
         html += '<div class="hist-ex">';
 
         if (ex.isCardio) {
@@ -1319,98 +1328,88 @@ function confirmReset() {
 }
 
 // ══════════════════════════════════════════════
-//  CHARTS — Evolução de carga por exercício
+//  CHARTS — lista colapsável, gráfico inline
 // ══════════════════════════════════════════════
-let chartSelectedEx = null;
-
 function openCharts() {
-  // Collect all exercises across all treinos
-  const allEx = [];
-  Object.values(TREINOS).forEach(t => t.exercises.forEach(ex => allEx.push(ex)));
-
-  // Build selector buttons (only show exercises that have data in at least 1 week)
   const weeks = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (k && k.startsWith('treino_leo_')) weeks.push(k);
   }
-  weeks.sort();
+  weeks.sort(); // oldest first for chart progression
 
-  const exWithData = allEx.filter(ex =>
-    weeks.some(wk => {
-      const d = JSON.parse(localStorage.getItem(wk) || '{}');
-      return getReferenceLoad(ex, d) !== null;
-    })
-  );
-
-  const sel = document.getElementById('chartExSelect');
-  if (!exWithData.length) {
-    sel.innerHTML = '<p style="color:var(--muted);font-size:13px">Registre cargas em pelo menos uma semana para ver a evolução.</p>';
-    document.getElementById('chartCanvas').style.display = 'none';
-    document.getElementById('chartEmpty').style.display = 'none';
-  } else {
-    sel.innerHTML = exWithData.map(ex =>
-      '<button class="chart-ex-btn' + (chartSelectedEx === ex.id ? ' active' : '') + '" onclick="selectChartEx(\''+ex.id+'\')">' + ex.name + '</button>'
-    ).join('');
-    if (!chartSelectedEx || !exWithData.find(e => e.id === chartSelectedEx)) {
-      chartSelectedEx = exWithData[0].id;
-    }
-    highlightChartBtn(chartSelectedEx);
-    renderChart(chartSelectedEx, weeks, allEx);
-  }
-
-  document.getElementById('chartModal').classList.add('open');
-}
-
-function selectChartEx(exId) {
-  chartSelectedEx = exId;
-  highlightChartBtn(exId);
-  const weeks = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith('treino_leo_')) weeks.push(k);
-  }
-  weeks.sort();
   const allEx = [];
-  Object.values(TREINOS).forEach(t => t.exercises.forEach(ex => allEx.push(ex)));
-  renderChart(exId, weeks, allEx);
-}
-
-function highlightChartBtn(exId) {
-  document.querySelectorAll('.chart-ex-btn').forEach(b => {
-    b.classList.toggle('active', b.getAttribute('onclick').includes("'"+exId+"'"));
-  });
-}
-
-function renderChart(exId, weeks, allEx) {
-  const ex = allEx.find(e => e.id === exId);
-  if (!ex) return;
-
-  const points = [];
-  weeks.forEach((wk, idx) => {
-    const d = JSON.parse(localStorage.getItem(wk) || '{}');
-    const kg = getReferenceLoad(ex, d);
-    if (kg !== null) {
-      const weekDate = wk.replace('treino_leo_week_','');
-      points.push({ label: formatDateBR(weekDate).slice(0,5), kg, week: idx + 1 });
-    }
+  Object.entries(TREINOS).forEach(([t, data]) => {
+    data.exercises.forEach(ex => allEx.push({ ...ex, treinoLabel: t }));
   });
 
-  const canvas = document.getElementById('chartCanvas');
-  const empty = document.getElementById('chartEmpty');
+  const list = document.getElementById('chartExList');
 
-  if (!points.length) {
-    canvas.style.display = 'none';
-    empty.style.display = 'block';
+  if (!weeks.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px 0">Registre cargas em pelo menos uma semana para ver a evolução.</p>';
+    document.getElementById('chartModal').classList.add('open');
     return;
   }
 
-  empty.style.display = 'none';
-  canvas.style.display = 'block';
+  let html = '';
+  allEx.forEach(ex => {
+    // Collect data points across all weeks
+    const points = [];
+    weeks.forEach(wk => {
+      const d = JSON.parse(localStorage.getItem(wk) || '{}');
+      const kg = getReferenceLoad(ex, d);
+      if (kg !== null) points.push({ label: formatDateBR(wk.replace('treino_leo_week_','')).slice(0,5), kg });
+    });
 
-  // Size canvas to device pixel ratio for sharp rendering
-  const W = canvas.parentElement.clientWidth - 40;
-  const H = Math.round(W * 0.55);
+    html += '<div class="chart-ex-row" id="crow_'+ex.id+'">';
+    html += '<div class="chart-ex-row-header" onclick="toggleChartRow(\''+ex.id+'\')">';
+    html += '<div>';
+    html += '<span class="chart-ex-row-treino">Treino ' + ex.treinoLabel + '</span><br>';
+    html += '<span class="chart-ex-row-name">' + ex.name + '</span>';
+    html += '</div>';
+    html += '<span class="chart-ex-row-chevron">⌄</span>';
+    html += '</div>';
+    html += '<div class="chart-ex-row-body" id="cbody_'+ex.id+'">';
+    if (!points.length) {
+      html += '<div class="chart-no-data">Sem dados ainda para este exercício.</div>';
+    } else {
+      html += '<canvas id="ccanvas_'+ex.id+'" style="width:100%;display:block"></canvas>';
+      // Store points as data attribute for rendering after DOM insertion
+      html += '<script type="application/json" id="cdata_'+ex.id+'">' + JSON.stringify(points) + '<\/script>';
+    }
+    html += '</div></div>';
+  });
+
+  list.innerHTML = html;
+  document.getElementById('chartModal').classList.add('open');
+}
+
+function toggleChartRow(exId) {
+  const row = document.getElementById('crow_'+exId);
+  const isOpen = row.classList.contains('open');
+  // Close all others
+  document.querySelectorAll('.chart-ex-row.open').forEach(r => r.classList.remove('open'));
+  if (!isOpen) {
+    row.classList.add('open');
+    // Render chart after a frame so the body is visible and has dimensions
+    requestAnimationFrame(() => {
+      const dataEl = document.getElementById('cdata_'+exId);
+      const canvas = document.getElementById('ccanvas_'+exId);
+      if (dataEl && canvas) {
+        const points = JSON.parse(dataEl.textContent);
+        drawChart(canvas, points, exId);
+      }
+    });
+  }
+}
+
+function drawChart(canvas, points, exId) {
+  const allEx = [];
+  Object.values(TREINOS).forEach(t => t.exercises.forEach(ex => allEx.push(ex)));
+  const ex = allEx.find(e => e.id === exId);
+
+  const W = canvas.parentElement.clientWidth - 24;
+  const H = Math.round(W * 0.52);
   const DPR = window.devicePixelRatio || 1;
   canvas.width = W * DPR;
   canvas.height = H * DPR;
@@ -1420,90 +1419,95 @@ function renderChart(exId, weeks, allEx) {
   const ctx = canvas.getContext('2d');
   ctx.scale(DPR, DPR);
 
-  const pad = { top: 24, right: 20, bottom: 40, left: 44 };
+  const pad = { top: 28, right: 16, bottom: 38, left: 46 };
   const cW = W - pad.left - pad.right;
   const cH = H - pad.top - pad.bottom;
 
   const kgs = points.map(p => p.kg);
   const minKg = Math.max(0, Math.min(...kgs) * 0.85);
-  const maxKg = Math.max(...kgs) * 1.1;
+  const maxKg = Math.max(...kgs) * 1.12;
   const range = maxKg - minKg || 1;
 
-  const toX = i => pad.left + (i / Math.max(points.length - 1, 1)) * cW;
+  const toX = i => pad.left + (points.length < 2 ? cW/2 : (i / (points.length - 1)) * cW);
   const toY = kg => pad.top + cH - ((kg - minKg) / range) * cH;
 
-  // Background
-  ctx.fillStyle = '#1e1e1e';
-  ctx.roundRect(0, 0, W, H, 10);
-  ctx.fill();
+  // Background (compatible — no roundRect)
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, W, H);
 
-  // Grid lines
-  ctx.strokeStyle = '#2e2e2e';
+  // Grid
+  ctx.strokeStyle = '#2a2a2a';
   ctx.lineWidth = 1;
-  const gridLines = 4;
+  const gridLines = 3;
   for (let i = 0; i <= gridLines; i++) {
     const y = pad.top + (i / gridLines) * cH;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
     const val = maxKg - (i / gridLines) * range;
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = '#555';
     ctx.font = '10px Arial';
     ctx.textAlign = 'right';
-    ctx.fillText(val.toFixed(1) + 'kg', pad.left - 4, y + 4);
+    ctx.fillText(Math.round(val) + 'kg', pad.left - 4, y + 4);
   }
 
-  // Gradient fill under line
-  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
-  grad.addColorStop(0, 'rgba(245,166,35,0.3)');
-  grad.addColorStop(1, 'rgba(245,166,35,0)');
-  ctx.beginPath();
-  ctx.moveTo(toX(0), toY(points[0].kg));
-  points.forEach((p, i) => { if (i > 0) ctx.lineTo(toX(i), toY(p.kg)); });
-  ctx.lineTo(toX(points.length-1), pad.top + cH);
-  ctx.lineTo(toX(0), pad.top + cH);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Line
-  ctx.beginPath();
-  ctx.strokeStyle = '#f5a623';
-  ctx.lineWidth = 2.5;
-  ctx.lineJoin = 'round';
-  points.forEach((p, i) => {
-    if (i === 0) ctx.moveTo(toX(i), toY(p.kg));
-    else ctx.lineTo(toX(i), toY(p.kg));
-  });
-  ctx.stroke();
-
-  // Points + labels
-  points.forEach((p, i) => {
-    const x = toX(i), y = toY(p.kg);
-    // Dot
+  if (points.length === 1) {
+    // Single point — just show dot + label
+    const x = toX(0), y = toY(points[0].kg);
     ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5a623'; ctx.fill();
     ctx.fillStyle = '#f5a623';
-    ctx.fill();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1.5;
+    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(points[0].kg + 'kg', x, y - 12);
+    ctx.fillStyle = '#555'; ctx.font = '10px Arial';
+    ctx.fillText(points[0].label, x, H - pad.bottom + 14);
+  } else {
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
+    grad.addColorStop(0, 'rgba(245,166,35,0.28)');
+    grad.addColorStop(1, 'rgba(245,166,35,0.02)');
+    ctx.beginPath();
+    ctx.moveTo(toX(0), toY(points[0].kg));
+    for (let i = 1; i < points.length; i++) ctx.lineTo(toX(i), toY(points[i].kg));
+    ctx.lineTo(toX(points.length - 1), pad.top + cH);
+    ctx.lineTo(toX(0), pad.top + cH);
+    ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#f5a623'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+    points.forEach((p, i) => i === 0 ? ctx.moveTo(toX(i), toY(p.kg)) : ctx.lineTo(toX(i), toY(p.kg)));
     ctx.stroke();
 
-    // Kg label above dot
-    ctx.fillStyle = '#f5a623';
-    ctx.font = 'bold 11px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(p.kg + 'kg', x, y - 10);
+    // Dots + labels
+    points.forEach((p, i) => {
+      const x = toX(i), y = toY(p.kg);
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#f5a623'; ctx.fill();
+      ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.stroke();
 
-    // Date label below
-    ctx.fillStyle = '#666';
-    ctx.font = '10px Arial';
-    ctx.fillText(p.label, x, H - pad.bottom + 14);
-  });
+      ctx.fillStyle = '#f5a623';
+      ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+      ctx.fillText(p.kg + 'kg', x, y - 10);
 
-  // Title
-  ctx.fillStyle = '#999';
-  ctx.font = '11px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText(ex.name, pad.left, 14);
+      ctx.fillStyle = '#555'; ctx.font = '10px Arial';
+      ctx.fillText(p.label, x, H - pad.bottom + 14);
+    });
+
+    // Arrow or highlight on last point if higher than first
+    if (points[points.length-1].kg > points[0].kg) {
+      const lx = toX(points.length-1), ly = toY(points[points.length-1].kg);
+      ctx.fillStyle = '#4ade80';
+      ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center';
+      ctx.fillText('⬆', lx + 12, ly - 4);
+    }
+  }
+
+  // Exercise name at top
+  ctx.fillStyle = '#888';
+  ctx.font = '10px Arial'; ctx.textAlign = 'left';
+  const shortName = (ex?.name || '').length > 35 ? (ex?.name || '').slice(0,33) + '…' : (ex?.name || '');
+  ctx.fillText(shortName, pad.left, 16);
 }
 
 function closeCharts() {
