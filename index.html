@@ -129,17 +129,40 @@
   .hist-entry { border-bottom: 1px solid var(--border); padding: 10px 0; font-size: 13px; }
   .hist-date { font-size: 10px; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
 
-  .hist-week { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  /* Semana (nível 1) */
+  .hist-week { margin-bottom: 8px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
   .hist-week-summary {
     cursor: pointer; list-style: none; padding: 12px 14px;
-    font-size: 13px; color: var(--accent); font-weight: 800;
-    background: var(--surface2);
+    font-size: 13px; color: var(--text); font-weight: 800;
+    background: var(--surface2); display: flex; justify-content: space-between; align-items: center;
   }
   .hist-week-summary::-webkit-details-marker { display: none; }
-  .hist-week-summary::after { content: ' ▾'; float: right; }
-  .hist-week[open] .hist-week-summary::after { content: ' ▴'; }
-  .hist-week-body { padding: 4px 14px 10px; }
+  .hist-week-summary .chevron { color: var(--muted); transition: transform 0.2s; }
+  .hist-week[open] .hist-week-summary .chevron { transform: rotate(180deg); }
+  .hist-week-body { padding: 6px 10px 10px; }
 
+  /* Dia (nível 2) */
+  .hist-day { margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .hist-day-summary {
+    cursor: pointer; list-style: none; padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px; background: var(--surface);
+  }
+  .hist-day-summary::-webkit-details-marker { display: none; }
+  .hist-day-badge {
+    background: var(--accent); color: #000; font-size: 10px; font-weight: 800;
+    border-radius: 6px; padding: 2px 7px; flex-shrink: 0;
+  }
+  .hist-day-badge.rest { background: #3a4a6e; color: #fff; }
+  .hist-day-meta { flex: 1; font-size: 12px; font-weight: 700; color: var(--text); }
+  .hist-day-date { font-size: 10px; color: var(--muted); }
+  .hist-day-chevron { color: var(--muted); font-size: 14px; transition: transform 0.2s; }
+  .hist-day[open] .hist-day-chevron { transform: rotate(180deg); }
+  .hist-day-body { padding: 8px 12px 12px; background: var(--bg); }
+
+  /* Exercício (nível 3) */
+  .hist-ex { margin-bottom: 10px; }
+  .hist-ex-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+  .hist-ex-sets { font-size: 11px; color: var(--muted); }
   .ref-load {
     margin-top: 5px; font-size: 11px; font-weight: 700;
     color: var(--accent); background: #1a1300;
@@ -147,12 +170,23 @@
     padding: 4px 8px; display: inline-block;
   }
   .ref-load-prog { color: var(--green); background: #0a1f0a; border-color: var(--green); }
-
   .hist-note {
-    margin-top: 5px; font-size: 11px; color: var(--muted);
+    margin-top: 4px; font-size: 11px; color: var(--muted);
     font-style: italic; background: var(--surface2);
-    border-radius: 6px; padding: 5px 8px;
+    border-radius: 6px; padding: 4px 8px;
   }
+
+  /* Guia de carga (topo do modal) */
+  .load-guide {
+    background: linear-gradient(135deg, #1a1300, #0d0d0d);
+    border: 1px solid var(--accent); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 14px;
+  }
+  .load-guide-title { font-size: 11px; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .load-guide-ex { font-size: 12px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+  .load-guide-name { color: var(--text); flex: 1; margin-right: 8px; }
+  .load-guide-kg { color: var(--accent); font-weight: 800; font-size: 13px; }
+  .load-guide-up { color: var(--green); font-size: 10px; font-weight: 700; }
 
   /* FAB */
   .fab { position: fixed; bottom: 24px; right: 20px; background: var(--accent); color: #000; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 22px; cursor: pointer; box-shadow: 0 4px 20px rgba(245,166,35,0.4); display: flex; align-items: center; justify-content: center; z-index: 99; }
@@ -261,6 +295,15 @@
   .celeb-btn-close { background: none; color: var(--muted); border: 1px solid var(--border); }
   .celeb-btn-close:active { background: var(--surface2); }
 
+  /* Chart exercise selector */
+  .chart-ex-btn {
+    display: inline-block; margin: 3px; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: 20px;
+    background: var(--surface2); color: var(--muted);
+    font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .chart-ex-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -307,14 +350,25 @@
 <!-- CONTENT -->
 <div id="content"></div>
 
-<!-- FAB: histórico -->
-<button class="fab" onclick="openHistory()" title="Histórico">📋</button>
+<!-- FABs -->
+<button class="fab" onclick="openHistory()" title="Histórico" style="right:84px">📋</button>
+<button class="fab" onclick="openCharts()" title="Evolução" style="right:20px">📈</button>
 
 <!-- HISTORY MODAL -->
 <div class="modal-overlay" id="histModal">
   <div class="modal">
-    <div class="modal-title">📋 Histórico de Cargas <button class="modal-close" onclick="closeHistory()">×</button></div>
+    <div class="modal-title">📋 Histórico <button class="modal-close" onclick="closeHistory()">×</button></div>
     <div id="histContent"></div>
+  </div>
+</div>
+
+<!-- CHART MODAL -->
+<div class="modal-overlay" id="chartModal">
+  <div class="modal">
+    <div class="modal-title">📈 Evolução de Carga <button class="modal-close" onclick="closeCharts()">×</button></div>
+    <div id="chartExSelect" style="margin-bottom:12px"></div>
+    <canvas id="chartCanvas" style="width:100%;border-radius:8px;background:var(--surface2)"></canvas>
+    <div id="chartEmpty" style="text-align:center;color:var(--muted);font-size:13px;padding:20px;display:none">Nenhum dado registrado ainda para este exercício.</div>
   </div>
 </div>
 
@@ -393,10 +447,11 @@ const TREINOS = {
     label:'Treino B', focus:'Quadríceps (c/ estímulo em posterior)',
     exercises:[
       {id:'b1',name:'Cadeira Adutora',sets:3,reps:'6–8',rest:90,warmup:{sets:1,reps:'12'},grp:'quadriceps'},
-      {id:'b2',name:'Isometria na Extensora',sets:3,reps:'6–8',rest:90,grp:'quadriceps'},
-      {id:'b3',name:'Cadeira Extensora',sets:3,reps:'6–8',rest:90,grp:'quadriceps'},
+      {id:'b2',name:'Isometria + Cadeira Extensora',sets:3,reps:'6–8',rest:90,grp:'quadriceps',note:'Faça 20s de isometria, depois execute as repetições na extensora sem soltar.'},
       {id:'b4',name:'Cadeira Flexora',sets:3,reps:'10–12',rest:60,grp:'posterior'},
       {id:'b5',name:'Panturrilha em Pé',sets:3,reps:'12–15',rest:60,grp:'panturrilha'},
+      {id:'b6',name:'Elevação Pélvica',sets:3,reps:'6–8',rest:90,grp:'gluteo'},
+      {id:'b7',name:'Afundo Máquina',sets:3,reps:'6–8',rest:90,grp:'quadriceps'},
     ]
   },
   C: {
@@ -415,7 +470,7 @@ const TREINOS = {
   D: {
     label:'Treino D', focus:'Posterior & Glúteo (c/ estímulo em quadríceps)',
     exercises:[
-      {id:'d1',name:'Elevação Pélvica',sets:3,reps:'6–8',rest:90,warmup:{sets:1,reps:'10'},grp:'gluteo'},
+      {id:'d1',name:'Leg Press 45',sets:3,reps:'6–8',rest:90,warmup:{sets:1,reps:'10'},grp:'quadriceps'},
       {id:'d2',name:'Stiff com Barra Livre',sets:3,reps:'6–8',rest:90,grp:'posterior'},
       {id:'d3',name:'Cadeira Flexora',sets:3,reps:'6–8',rest:90,grp:'posterior'},
       {id:'d4',name:'Flexora Vertical Unilateral',sets:3,reps:'6–8',rest:90,grp:'posterior'},
@@ -456,16 +511,22 @@ const DAY_NAMES = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const CIRCUMFERENCE = 2 * Math.PI * 88; // 552.9
 
 // ══════════════════════════════════════════════
-//  TIMER STATE
+//  TIMER STATE (timestamp-based — survives iOS background)
 // ══════════════════════════════════════════════
 let timerInterval = null;
 let timerTotal = 90;
 let timerRemaining = 90;
+let timerEndAt = null;   // epoch ms when timer should fire
 let timerExLabel = '';
 
 function setTimerPreset(secs) {
   timerTotal = secs;
-  timerRemaining = secs;
+  if (timerEndAt) {
+    // Timer running: shift end time
+    timerEndAt = Date.now() + secs * 1000;
+  } else {
+    timerRemaining = secs;
+  }
   document.querySelectorAll('.timer-preset').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
   updateTimerDisplay();
@@ -475,13 +536,13 @@ function startTimer(exName, nextExName, seconds) {
   if (timerInterval) clearInterval(timerInterval);
   timerTotal = seconds;
   timerRemaining = seconds;
+  timerEndAt = Date.now() + seconds * 1000;
   timerExLabel = exName;
 
-  // Update preset active state
   document.querySelectorAll('.timer-preset').forEach(b => {
-    b.classList.toggle('active', parseInt(b.textContent) === seconds ||
-      (seconds === 90 && b.textContent === '1:30') ||
+    b.classList.toggle('active',
       (seconds === 60 && b.textContent === '1:00') ||
+      (seconds === 90 && b.textContent === '1:30') ||
       (seconds === 120 && b.textContent === '2:00') ||
       (seconds === 150 && b.textContent === '2:30'));
   });
@@ -495,19 +556,28 @@ function startTimer(exName, nextExName, seconds) {
   document.getElementById('timerOverlay').classList.add('open');
   updateTimerDisplay();
 
-  timerInterval = setInterval(() => {
-    timerRemaining--;
-    if (timerRemaining <= 0) {
-      timerRemaining = 0;
-      updateTimerDisplay();
-      clearInterval(timerInterval);
-      timerInterval = null;
-      onTimerEnd();
-    } else {
-      updateTimerDisplay();
-    }
-  }, 1000);
+  timerInterval = setInterval(timerTick, 250); // 250ms for smooth display
 }
+
+function timerTick() {
+  if (!timerEndAt) return;
+  const remaining = Math.max(0, Math.round((timerEndAt - Date.now()) / 1000));
+  timerRemaining = remaining;
+  updateTimerDisplay();
+  if (remaining <= 0) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    timerEndAt = null;
+    onTimerEnd();
+  }
+}
+
+// When page becomes visible again, immediately recalculate remaining time
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && timerEndAt) {
+    timerTick(); // instant update without waiting for next tick
+  }
+});
 
 function updateTimerDisplay() {
   const m = Math.floor(timerRemaining / 60);
@@ -515,6 +585,7 @@ function updateTimerDisplay() {
   const display = m + ':' + String(s).padStart(2,'0');
   const digits = document.getElementById('timerDigits');
   const ring = document.getElementById('timerRing');
+  if (!digits || !ring) return;
   digits.textContent = display;
 
   const pct = timerTotal > 0 ? timerRemaining / timerTotal : 0;
@@ -527,33 +598,32 @@ function updateTimerDisplay() {
 }
 
 function onTimerEnd() {
-  // Vibrate on supported devices
   if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-  // Flash the overlay briefly
   const overlay = document.getElementById('timerOverlay');
   overlay.style.background = 'rgba(74,222,128,0.15)';
   setTimeout(() => {
     overlay.style.background = '';
-    // Auto-close after 1.5s
     setTimeout(stopTimer, 1500);
   }, 400);
 }
 
 function addTimerSeconds(n) {
-  timerRemaining += n;
-  if (timerRemaining > 600) timerRemaining = 600;
+  timerRemaining = Math.min(600, timerRemaining + n);
+  if (timerEndAt) timerEndAt = Date.now() + timerRemaining * 1000;
   updateTimerDisplay();
 }
 
 function skipTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = null;
+  timerEndAt = null;
   stopTimer();
 }
 
 function stopTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = null;
+  timerEndAt = null;
   document.getElementById('timerOverlay').classList.remove('open');
 }
 
@@ -1041,7 +1111,7 @@ function updateWeekProgress() {
 }
 
 // ══════════════════════════════════════════════
-//  HISTORY
+//  HISTORY (3 níveis: Semana → Dia → Exercícios)
 // ══════════════════════════════════════════════
 function openHistory() {
   const weeks = [];
@@ -1054,119 +1124,188 @@ function openHistory() {
   const content = document.getElementById('histContent');
   if (!weeks.length) {
     content.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum histórico ainda. Complete sua primeira série!</p>';
-  } else {
-    let html = '';
-    weeks.forEach((wk, wIdx) => {
-      const wData = JSON.parse(localStorage.getItem(wk) || '{}');
-      const weekDate = wk.replace('treino_leo_week_','');
-      const isFirst = wIdx === 0;
+    document.getElementById('histModal').classList.add('open');
+    return;
+  }
 
-      html += '<details class="hist-week" ' + (isFirst ? 'open' : '') + '>';
-      html += '<summary class="hist-week-summary">📅 Semana de ' + formatDateBR(weekDate) + '</summary>';
-      html += '<div class="hist-week-body">';
+  // ── Guia de carga: referência da semana mais recente ──
+  const latestData = JSON.parse(localStorage.getItem(weeks[0]) || '{}');
+  const guideItems = buildLoadGuide(latestData);
 
-      // ── Treinos de força ──
-      Object.entries(TREINOS).forEach(([t, data]) => {
-        const hasData = data.exercises.some(ex => {
-          for (let s = 1; s <= ex.sets; s++) { if (wData[ex.id+'_'+s]?.kg || wData[ex.id+'_'+s]?.reps) return true; }
-          return false;
-        });
-        if (!hasData) return;
+  let html = '';
+  if (guideItems.length) {
+    html += '<div class="load-guide">';
+    html += '<div class="load-guide-title">📌 Referência para essa semana</div>';
+    guideItems.forEach(g => {
+      html += '<div class="load-guide-ex">';
+      html += '<span class="load-guide-name">' + g.name + '</span>';
+      html += '<span class="load-guide-kg">' + g.kg + 'kg</span>';
+      if (g.up) html += '&nbsp;<span class="load-guide-up">⬆ subir</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
 
-        let latestDate = null;
-        data.exercises.forEach(ex => {
-          for (let s = 1; s <= ex.sets; s++) {
-            const d = wData[ex.id+'_'+s];
-            if (d?.date && (!latestDate || d.date > latestDate)) latestDate = d.date;
+  // ── Semanas ──
+  weeks.forEach((wk, wIdx) => {
+    const wData = JSON.parse(localStorage.getItem(wk) || '{}');
+    const weekDate = wk.replace('treino_leo_week_','');
+    const isFirst = wIdx === 0;
+    const weekDays = buildWeekDays(wData, weekDate);
+    if (!weekDays.length) return;
+
+    html += '<details class="hist-week"' + (isFirst ? ' open' : '') + '>';
+    html += '<summary class="hist-week-summary">';
+    html += '<span>Semana de ' + formatDateBR(weekDate) + '</span>';
+    html += '<span class="chevron">⌄</span></summary>';
+    html += '<div class="hist-week-body">';
+
+    weekDays.forEach(day => {
+      const training = day.training;
+      const label = training ? TREINOS[training]?.label : 'Descanso';
+      const focus = training ? TREINOS[training]?.focus : '';
+
+      html += '<details class="hist-day">';
+      html += '<summary class="hist-day-summary">';
+      html += '<span class="hist-day-badge' + (training ? '' : ' rest') + '">' + (training || '—') + '</span>';
+      html += '<div>';
+      html += '<div class="hist-day-meta">' + label + (focus ? ' · ' + focus : '') + '</div>';
+      html += '<div class="hist-day-date">' + day.dateLabel + '</div>';
+      html += '</div>';
+      html += '<span class="hist-day-chevron">⌄</span>';
+      html += '</summary>';
+      html += '<div class="hist-day-body">';
+
+      day.exercises.forEach(ex => {
+        if (!ex.lines.length && !ex.cardioDone && !ex.absDone) return;
+        html += '<div class="hist-ex">';
+
+        if (ex.isCardio) {
+          html += '<div class="hist-ex-name">🏃 Cardio — ' + ex.mins + 'min ✓</div>';
+        } else if (ex.isAbs) {
+          html += '<div class="hist-ex-name">🔥 Abdominal completo ✓</div>';
+        } else {
+          html += '<div class="hist-ex-name">' + ex.name + '</div>';
+          html += '<div class="hist-ex-sets">' + ex.lines.join(' · ') + '</div>';
+          if (ex.refKg !== null) {
+            html += '<span class="ref-load' + (ex.hitMax ? ' ref-load-prog' : '') + '">';
+            html += (ex.hitMax ? '🏆 Subir de ' : '📌 ') + ex.refKg + 'kg';
+            html += '</span>';
           }
-        });
-        const dateLabel = latestDate ? formatDateBR(latestDate) : '';
-
-        html += '<div class="hist-entry"><div class="hist-date">'+data.label+' — '+data.focus + (dateLabel ? ' · 📅 '+dateLabel : '') + '</div>';
-        data.exercises.forEach(ex => {
-          const lines = [];
-          for (let s = 1; s <= ex.sets; s++) {
-            const d = wData[ex.id+'_'+s] || {};
-            if (d.kg || d.reps) lines.push('S'+s+': '+(d.kg||'?')+'kg × '+(d.reps||'?'));
-          }
-          if (!lines.length) return;
-
-          // Carga de referência: última série registrada com maior carga válida
-          const refKg = getReferenceLoad(ex, wData);
-          const maxRep = parseInt((ex.reps.split('–')[1]||ex.reps).toString().trim());
-          const hitMax = checkProgressionFromData(ex, wData, maxRep);
-
-          html += '<div style="font-size:12px;margin-top:6px"><span style="color:var(--text);font-weight:700">'+ex.name+'</span><br>';
-          html += '<span style="color:var(--muted)">'+lines.join(' · ')+'</span>';
-          if (refKg) {
-            html += '<div class="ref-load' + (hitMax ? ' ref-load-prog' : '') + '">';
-            html += (hitMax ? '🏆 Próxima semana: subir de ' : '📌 Referência p/ próxima semana: ') + refKg + 'kg';
-            html += '</div>';
-          }
-          const noteText = wData['note_'+ex.id];
-          if (noteText) {
-            html += '<div class="hist-note">📝 ' + noteText + '</div>';
-          }
-          html += '</div>';
-        });
+          if (ex.note) html += '<div class="hist-note">📝 ' + ex.note + '</div>';
+        }
         html += '</div>';
       });
-
-      // ── Abdominal (por dia) ──
-      const absDone = [];
-      [0,1,2,3,4,5,6].forEach(dow => {
-        if (!ABS_DAYS.includes(dow)) return;
-        const hasAbs = AB_EXERCISES.some(ex => {
-          const id = ex.id + '_d' + dow;
-          for (let s = 1; s <= ex.sets; s++) { if (wData[id+'_'+s]?.done) return true; }
-          return false;
-        });
-        if (hasAbs) absDone.push(dow);
-      });
-      if (absDone.length) {
-        html += '<div class="hist-entry"><div class="hist-date">🔥 Abdominal</div>';
-        absDone.forEach(dow => {
-          html += '<div style="font-size:12px;margin-top:4px;color:var(--muted)">' + DAY_NAMES[dow] + ': completo ✓</div>';
-        });
-        html += '</div>';
-      }
-
-      // ── Cardio (por dia) ──
-      const cardioDone = [0,1,2,3,4,5,6].filter(dow => wData['cardio_'+dow]);
-      if (cardioDone.length) {
-        html += '<div class="hist-entry"><div class="hist-date">🏃 Cardio</div>';
-        cardioDone.forEach(dow => {
-          const mins = SCHEDULE[dow] ? 45 : 60;
-          html += '<div style="font-size:12px;margin-top:4px;color:var(--muted)">' + DAY_NAMES[dow] + ': ' + mins + 'min ✓</div>';
-        });
-        html += '</div>';
-      }
 
       html += '</div></details>';
     });
-    content.innerHTML = html;
-  }
+
+    html += '</div></details>';
+  });
+
+  content.innerHTML = html;
   document.getElementById('histModal').classList.add('open');
 }
 
-// Retorna a maior carga válida registrada para o exercício na semana (referência p/ progressão)
+// Constrói os dias com treino para uma semana, agrupados por data de execução
+function buildWeekDays(wData, weekMonday) {
+  const daysByDate = {};
+
+  // Exercícios de força
+  Object.entries(TREINOS).forEach(([t, data]) => {
+    data.exercises.forEach(ex => {
+      for (let s = 1; s <= ex.sets; s++) {
+        const d = wData[ex.id+'_'+s];
+        if (!d) continue;
+        const dateKey = d.date || weekMonday;
+        if (!daysByDate[dateKey]) daysByDate[dateKey] = { training: t, exercises: [] };
+        // Add exercise entry if not already there
+        if (!daysByDate[dateKey].exercises.find(e => e.id === ex.id)) {
+          const lines = [];
+          for (let ss = 1; ss <= ex.sets; ss++) {
+            const dd = wData[ex.id+'_'+ss] || {};
+            if (dd.kg || dd.reps) lines.push('S'+ss+': '+(dd.kg||'?')+'kg × '+(dd.reps||'?'));
+          }
+          const maxRep = parseInt((ex.reps.split('–')[1]||ex.reps).toString().trim());
+          const refKg = getReferenceLoad(ex, wData);
+          const hitMax = refKg !== null && checkProgressionFromData(ex, wData, maxRep);
+          daysByDate[dateKey].exercises.push({
+            id: ex.id, name: ex.name, lines,
+            refKg, hitMax,
+            note: wData['note_'+ex.id] || ''
+          });
+        }
+        break; // only need the first series to establish the date
+      }
+    });
+  });
+
+  // Abdominal por dia
+  [0,1,2,3,4,5,6].forEach(dow => {
+    if (!ABS_DAYS.includes(dow)) return;
+    const hasAbs = AB_EXERCISES.some(ex => {
+      const id = ex.id+'_d'+dow;
+      for (let s = 1; s <= ex.sets; s++) { if (wData[id+'_'+s]?.done) return true; }
+      return false;
+    });
+    if (!hasAbs) return;
+    // Find the date for this dow within the week
+    const weekStart = new Date(weekMonday + 'T00:00:00');
+    const dayOffset = (dow === 0 ? 6 : dow - 1); // Mon=0...Sun=6
+    const date = new Date(weekStart); date.setDate(weekStart.getDate() + dayOffset);
+    const dateKey = localISODate(date);
+    if (!daysByDate[dateKey]) daysByDate[dateKey] = { training: SCHEDULE[dow], exercises: [] };
+    daysByDate[dateKey].exercises.push({ isAbs: true, absDone: true });
+  });
+
+  // Cardio por dia
+  [0,1,2,3,4,5,6].forEach(dow => {
+    if (!wData['cardio_'+dow]) return;
+    const weekStart = new Date(weekMonday + 'T00:00:00');
+    const dayOffset = (dow === 0 ? 6 : dow - 1);
+    const date = new Date(weekStart); date.setDate(weekStart.getDate() + dayOffset);
+    const dateKey = localISODate(date);
+    const mins = SCHEDULE[dow] ? 45 : 60;
+    if (!daysByDate[dateKey]) daysByDate[dateKey] = { training: SCHEDULE[dow], exercises: [] };
+    daysByDate[dateKey].exercises.push({ isCardio: true, cardioDone: true, mins });
+  });
+
+  return Object.entries(daysByDate)
+    .sort((a,b) => b[0].localeCompare(a[0])) // most recent first
+    .map(([date, day]) => ({ ...day, dateLabel: formatDateBR(date) }));
+}
+
+// Carga de referência (maior kg em qualquer série)
 function getReferenceLoad(ex, wData) {
   let maxKg = null;
   for (let s = 1; s <= ex.sets; s++) {
-    const d = wData[ex.id+'_'+s];
-    const kg = parseFloat(d?.kg);
+    const kg = parseFloat(wData[ex.id+'_'+s]?.kg);
     if (!isNaN(kg) && (maxKg === null || kg > maxKg)) maxKg = kg;
   }
   return maxKg;
 }
 
-// Verifica se todas as séries bateram o teto de reps (mesma lógica de checkProgression, mas a partir de dados salvos)
 function checkProgressionFromData(ex, wData, maxRep) {
   for (let s = 1; s <= ex.sets; s++) {
     const d = wData[ex.id+'_'+s];
     if (!d?.done || !d.reps || parseInt(d.reps) < maxRep) return false;
   }
   return true;
+}
+
+// Guia de carga: lista todos exercícios com carga registrada na semana mais recente
+function buildLoadGuide(wData) {
+  const items = [];
+  Object.values(TREINOS).forEach(data => {
+    data.exercises.forEach(ex => {
+      const kg = getReferenceLoad(ex, wData);
+      if (kg === null) return;
+      const maxRep = parseInt((ex.reps.split('–')[1]||ex.reps).toString().trim());
+      const up = checkProgressionFromData(ex, wData, maxRep);
+      items.push({ name: ex.name, kg, up });
+    });
+  });
+  return items;
 }
 
 function closeHistory() { document.getElementById('histModal').classList.remove('open'); }
@@ -1177,6 +1316,198 @@ function confirmReset() {
     loadState(); openCards = {};
     renderContent(currentDay); renderWeekBar();
   }
+}
+
+// ══════════════════════════════════════════════
+//  CHARTS — Evolução de carga por exercício
+// ══════════════════════════════════════════════
+let chartSelectedEx = null;
+
+function openCharts() {
+  // Collect all exercises across all treinos
+  const allEx = [];
+  Object.values(TREINOS).forEach(t => t.exercises.forEach(ex => allEx.push(ex)));
+
+  // Build selector buttons (only show exercises that have data in at least 1 week)
+  const weeks = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('treino_leo_')) weeks.push(k);
+  }
+  weeks.sort();
+
+  const exWithData = allEx.filter(ex =>
+    weeks.some(wk => {
+      const d = JSON.parse(localStorage.getItem(wk) || '{}');
+      return getReferenceLoad(ex, d) !== null;
+    })
+  );
+
+  const sel = document.getElementById('chartExSelect');
+  if (!exWithData.length) {
+    sel.innerHTML = '<p style="color:var(--muted);font-size:13px">Registre cargas em pelo menos uma semana para ver a evolução.</p>';
+    document.getElementById('chartCanvas').style.display = 'none';
+    document.getElementById('chartEmpty').style.display = 'none';
+  } else {
+    sel.innerHTML = exWithData.map(ex =>
+      '<button class="chart-ex-btn' + (chartSelectedEx === ex.id ? ' active' : '') + '" onclick="selectChartEx(\''+ex.id+'\')">' + ex.name + '</button>'
+    ).join('');
+    if (!chartSelectedEx || !exWithData.find(e => e.id === chartSelectedEx)) {
+      chartSelectedEx = exWithData[0].id;
+    }
+    highlightChartBtn(chartSelectedEx);
+    renderChart(chartSelectedEx, weeks, allEx);
+  }
+
+  document.getElementById('chartModal').classList.add('open');
+}
+
+function selectChartEx(exId) {
+  chartSelectedEx = exId;
+  highlightChartBtn(exId);
+  const weeks = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('treino_leo_')) weeks.push(k);
+  }
+  weeks.sort();
+  const allEx = [];
+  Object.values(TREINOS).forEach(t => t.exercises.forEach(ex => allEx.push(ex)));
+  renderChart(exId, weeks, allEx);
+}
+
+function highlightChartBtn(exId) {
+  document.querySelectorAll('.chart-ex-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('onclick').includes("'"+exId+"'"));
+  });
+}
+
+function renderChart(exId, weeks, allEx) {
+  const ex = allEx.find(e => e.id === exId);
+  if (!ex) return;
+
+  const points = [];
+  weeks.forEach((wk, idx) => {
+    const d = JSON.parse(localStorage.getItem(wk) || '{}');
+    const kg = getReferenceLoad(ex, d);
+    if (kg !== null) {
+      const weekDate = wk.replace('treino_leo_week_','');
+      points.push({ label: formatDateBR(weekDate).slice(0,5), kg, week: idx + 1 });
+    }
+  });
+
+  const canvas = document.getElementById('chartCanvas');
+  const empty = document.getElementById('chartEmpty');
+
+  if (!points.length) {
+    canvas.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  canvas.style.display = 'block';
+
+  // Size canvas to device pixel ratio for sharp rendering
+  const W = canvas.parentElement.clientWidth - 40;
+  const H = Math.round(W * 0.55);
+  const DPR = window.devicePixelRatio || 1;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  const pad = { top: 24, right: 20, bottom: 40, left: 44 };
+  const cW = W - pad.left - pad.right;
+  const cH = H - pad.top - pad.bottom;
+
+  const kgs = points.map(p => p.kg);
+  const minKg = Math.max(0, Math.min(...kgs) * 0.85);
+  const maxKg = Math.max(...kgs) * 1.1;
+  const range = maxKg - minKg || 1;
+
+  const toX = i => pad.left + (i / Math.max(points.length - 1, 1)) * cW;
+  const toY = kg => pad.top + cH - ((kg - minKg) / range) * cH;
+
+  // Background
+  ctx.fillStyle = '#1e1e1e';
+  ctx.roundRect(0, 0, W, H, 10);
+  ctx.fill();
+
+  // Grid lines
+  ctx.strokeStyle = '#2e2e2e';
+  ctx.lineWidth = 1;
+  const gridLines = 4;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = pad.top + (i / gridLines) * cH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxKg - (i / gridLines) * range;
+    ctx.fillStyle = '#666';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(1) + 'kg', pad.left - 4, y + 4);
+  }
+
+  // Gradient fill under line
+  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
+  grad.addColorStop(0, 'rgba(245,166,35,0.3)');
+  grad.addColorStop(1, 'rgba(245,166,35,0)');
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(points[0].kg));
+  points.forEach((p, i) => { if (i > 0) ctx.lineTo(toX(i), toY(p.kg)); });
+  ctx.lineTo(toX(points.length-1), pad.top + cH);
+  ctx.lineTo(toX(0), pad.top + cH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#f5a623';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  points.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(toX(i), toY(p.kg));
+    else ctx.lineTo(toX(i), toY(p.kg));
+  });
+  ctx.stroke();
+
+  // Points + labels
+  points.forEach((p, i) => {
+    const x = toX(i), y = toY(p.kg);
+    // Dot
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#f5a623';
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Kg label above dot
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.kg + 'kg', x, y - 10);
+
+    // Date label below
+    ctx.fillStyle = '#666';
+    ctx.font = '10px Arial';
+    ctx.fillText(p.label, x, H - pad.bottom + 14);
+  });
+
+  // Title
+  ctx.fillStyle = '#999';
+  ctx.font = '11px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText(ex.name, pad.left, 14);
+}
+
+function closeCharts() {
+  document.getElementById('chartModal').classList.remove('open');
 }
 
 // ══════════════════════════════════════════════
