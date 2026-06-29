@@ -177,16 +177,30 @@
   }
 
   /* Guia de carga (topo do modal) */
-  .load-guide {
-    background: linear-gradient(135deg, #1a1300, #0d0d0d);
-    border: 1px solid var(--accent); border-radius: 10px;
-    padding: 12px 14px; margin-bottom: 14px;
+  /* Guia de cargas por treino (colapsável) */
+  .guide-treino-row { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; overflow: hidden; }
+  .guide-treino-header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    cursor: pointer; background: var(--surface2);
   }
-  .load-guide-title { font-size: 11px; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-  .load-guide-ex { font-size: 12px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
-  .load-guide-name { color: var(--text); flex: 1; margin-right: 8px; }
-  .load-guide-kg { color: var(--accent); font-weight: 800; font-size: 13px; }
-  .load-guide-up { color: var(--green); font-size: 10px; font-weight: 700; }
+  .guide-treino-header:active { background: var(--border); }
+  .guide-treino-badge {
+    width: 28px; height: 28px; flex-shrink: 0;
+    background: var(--accent); color: #000;
+    border-radius: 8px; font-size: 12px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .guide-treino-meta { font-size: 12px; font-weight: 700; color: var(--text); }
+  .guide-treino-chevron { color: var(--muted); font-size: 14px; transition: transform 0.2s; margin-left: auto; }
+  .guide-treino-row.open .guide-treino-chevron { transform: rotate(180deg); }
+  .guide-treino-body { display: none; padding: 8px 12px 12px; background: var(--bg); }
+  .guide-treino-row.open .guide-treino-body { display: block; }
+
+  .guide-ex-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .guide-ex-row:last-child { border-bottom: none; }
+  .guide-ex-name { font-size: 12px; color: var(--text); flex: 1; margin-right: 8px; }
+  .guide-ex-kg { font-size: 13px; font-weight: 800; color: var(--accent); flex-shrink: 0; }
+  .guide-ex-up { color: var(--green); }
 
   /* FAB */
   .fab { position: fixed; bottom: 24px; right: 20px; background: var(--accent); color: #000; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 22px; cursor: pointer; box-shadow: 0 4px 20px rgba(245,166,35,0.4); display: flex; align-items: center; justify-content: center; z-index: 99; }
@@ -672,6 +686,16 @@ function localISODate(date) {
   return y + '-' + m + '-' + d;
 }
 function todayISO() { return localISODate(new Date()); }
+// cardio pode ser: true (formato antigo), { done: true, date: 'YYYY-MM-DD' } (novo), ou falsy
+function isCardioDone(dow, src) {
+  const v = (src || state)['cardio_' + dow];
+  return v === true || (v && v.done === true);
+}
+function cardioDate(dow, src) {
+  const v = (src || state)['cardio_' + dow];
+  if (!v) return null;
+  return v.date || null; // antigo formato não tem data
+}
 function formatDateBR(iso) {
   const [y,m,d] = iso.split('-');
   return d + '/' + m + '/' + y;
@@ -708,7 +732,7 @@ function renderWeekBar() {
 
 function isDayDone(dow) {
   const t = SCHEDULE[dow];
-  const cardioDone = !!state['cardio_' + dow];
+  const cardioDone = isCardioDone(dow);
   if (!t) {
     // Rest day: only cardio defines completion
     return cardioDone;
@@ -879,7 +903,7 @@ function renderContent(dow) {
     document.getElementById('todayFocus').textContent = 'Recuperação ativa. Você merece!';
     content.innerHTML = '<div class="rest-screen"><div class="rest-icon">🛌</div><div class="rest-title">Dia de Descanso</div><div class="rest-sub">Recuperação é parte do treino.<br>Hidrate-se bem e descanse!</div></div>'
       + buildCardioCard(60, dow);
-    document.getElementById('todayPct').textContent = state['cardio_'+dow] ? '100%' : '0%';
+    document.getElementById('todayPct').textContent = isCardioDone(dow) ? '100%' : '0%';
     updateWeekProgress();
     return;
   }
@@ -947,8 +971,7 @@ function buildExCard(ex, num) {
 }
 
 function buildCardioCard(minutes, dow) {
-  const k = 'cardio_' + dow;
-  const done = !!state[k];
+  const done = isCardioDone(dow);
   return '<div class="section-label">🏃 Cardio</div>' +
     '<div class="ex-card cardio-card ' + (done ? 'completed' : '') + '" id="card_cardio">' +
       '<div class="ex-header" onclick="toggleCardio(' + dow + ')" style="cursor:pointer">' +
@@ -964,20 +987,27 @@ function buildCardioCard(minutes, dow) {
 
 function toggleCardio(dow) {
   const k = 'cardio_' + dow;
-  state[k] = !state[k];
+  if (state[k]) {
+    // Desmarcar: remove completamente
+    delete state[k];
+  } else {
+    // Marcar: salva com a data real de hoje
+    state[k] = { done: true, date: todayISO() };
+  }
   saveState();
+  const done = !!state[k];
   const card = document.getElementById('card_cardio');
   const chk = document.getElementById('chk_cardio');
   const num = card?.querySelector('.ex-num');
-  card?.classList.toggle('completed', !!state[k]);
-  chk?.classList.toggle('done', !!state[k]);
-  if (num) num.textContent = state[k] ? '✓' : '🏃';
+  card?.classList.toggle('completed', done);
+  chk?.classList.toggle('done', done);
+  if (num) num.textContent = done ? '✓' : '🏃';
 
   // Update day %, week bar/progress
   if (SCHEDULE[currentDay]) {
     updateDayProgress(getAllExForDay(currentDay), currentDay);
   } else {
-    document.getElementById('todayPct').textContent = state[k] ? '100%' : '0%';
+    document.getElementById('todayPct').textContent = done ? '100%' : '0%';
   }
   updateWeekProgress();
   renderWeekBar();
@@ -1109,7 +1139,7 @@ function updateDayProgress(exercises, dow) {
   exercises.forEach(ex => { total += ex.sets; done += countSeriesDone(ex); });
   // Cardio counts as +1 unit toward the day's total
   total += 1;
-  if (state['cardio_' + (dow !== undefined ? dow : currentDay)]) done += 1;
+  if (isCardioDone(dow !== undefined ? dow : currentDay)) done += 1;
   document.getElementById('todayPct').textContent = (total > 0 ? Math.round(done/total*100) : 0) + '%';
 }
 
@@ -1137,22 +1167,72 @@ function openHistory() {
     return;
   }
 
-  // ── Guia de carga: referência da semana mais recente ──
-  const latestData = JSON.parse(localStorage.getItem(weeks[0]) || '{}');
-  const guideItems = buildLoadGuide(latestData);
+  // ── Guia de carga: referência colapsável por treino ──
+  // Busca a sessão mais recente de cada treino em qualquer semana
+  const lastSessionByTreino = {};
+  weeks.forEach(wk => {
+    const wData = JSON.parse(localStorage.getItem(wk) || '{}');
+    Object.entries(TREINOS).forEach(([t, data]) => {
+      if (lastSessionByTreino[t]) return; // já encontrou a mais recente (weeks está desc)
+      const hasData = data.exercises.some(ex => {
+        for (let s = 1; s <= ex.sets; s++) {
+          if (wData[ex.id+'_'+s]?.kg) return true;
+        }
+        return false;
+      });
+      if (hasData) lastSessionByTreino[t] = wData;
+    });
+  });
 
   let html = '';
-  if (guideItems.length) {
-    html += '<div class="load-guide">';
-    html += '<div class="load-guide-title">📌 Referência para essa semana</div>';
-    guideItems.forEach(g => {
-      html += '<div class="load-guide-ex">';
-      html += '<span class="load-guide-name">' + g.name + '</span>';
-      html += '<span class="load-guide-kg">' + g.kg + 'kg</span>';
-      if (g.up) html += '&nbsp;<span class="load-guide-up">⬆ subir</span>';
+  const treinoLetters = Object.keys(TREINOS);
+  const hasAnyGuide = treinoLetters.some(t => lastSessionByTreino[t]);
+  if (hasAnyGuide) {
+    html += '<div style="font-size:11px;color:var(--accent);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📌 Referência de cargas</div>';
+    treinoLetters.forEach(t => {
+      const wData = lastSessionByTreino[t];
+      const data = TREINOS[t];
+      if (!wData) {
+        html += '<div class="guide-treino-row" id="guide_'+t+'">';
+        html += '<div class="guide-treino-header" onclick="toggleGuide(\''+t+'\')">';
+        html += '<span class="guide-treino-badge">'+t+'</span>';
+        html += '<span class="guide-treino-meta">'+data.focus+'</span>';
+        html += '<span style="color:var(--muted);font-size:11px">Sem dados ▸</span>';
+        html += '</div></div>';
+        return;
+      }
+      // Get last execution date for this treino
+      let latestDate = null;
+      data.exercises.forEach(ex => {
+        for (let s = 1; s <= ex.sets; s++) {
+          const d = wData[ex.id+'_'+s];
+          if (d?.date && (!latestDate || d.date > latestDate)) latestDate = d.date;
+        }
+      });
+
+      html += '<div class="guide-treino-row" id="guide_'+t+'">';
+      html += '<div class="guide-treino-header" onclick="toggleGuide(\''+t+'\')">';
+      html += '<span class="guide-treino-badge">'+t+'</span>';
+      html += '<div style="flex:1">';
+      html += '<div class="guide-treino-meta">'+data.focus+'</div>';
+      if (latestDate) html += '<div style="font-size:10px;color:var(--muted)">Última: '+formatDateBR(latestDate)+'</div>';
       html += '</div>';
+      html += '<span class="guide-treino-chevron">⌄</span>';
+      html += '</div>';
+      html += '<div class="guide-treino-body" id="guidebody_'+t+'">';
+      data.exercises.forEach(ex => {
+        const refKg = getReferenceLoad(ex, wData);
+        if (refKg === null) return;
+        const maxRep = parseInt((ex.reps.split('–')[1]||ex.reps).toString().trim());
+        const up = checkProgressionFromData(ex, wData, maxRep);
+        html += '<div class="guide-ex-row">';
+        html += '<span class="guide-ex-name">'+ex.name+'</span>';
+        html += '<span class="guide-ex-kg'+(up?' guide-ex-up':'')+'">'+refKg+'kg'+(up?' ⬆':'')+'</span>';
+        html += '</div>';
+      });
+      html += '</div></div>';
     });
-    html += '</div>';
+    html += '<div style="margin-bottom:14px"></div>';
   }
 
   // ── Semanas ──
@@ -1267,13 +1347,20 @@ function buildWeekDays(wData, weekMonday) {
     daysByDate[dateKey].exercises.push({ isAbs: true, absDone: true });
   });
 
-  // Cardio por dia
+  // Cardio por dia — usa a data real armazenada (novo formato) ou calcula pelo offset (formato antigo)
   [0,1,2,3,4,5,6].forEach(dow => {
-    if (!wData['cardio_'+dow]) return;
-    const weekStart = new Date(weekMonday + 'T00:00:00');
-    const dayOffset = (dow === 0 ? 6 : dow - 1);
-    const date = new Date(weekStart); date.setDate(weekStart.getDate() + dayOffset);
-    const dateKey = localISODate(date);
+    const cardioVal = wData['cardio_'+dow];
+    if (!cardioVal) return;
+    const isCardioDoneVal = cardioVal === true || (cardioVal && cardioVal.done);
+    if (!isCardioDoneVal) return;
+    // Prefere data real salva; fallback: offset do dow dentro da semana
+    let dateKey = cardioVal.date || null;
+    if (!dateKey) {
+      const weekStart = new Date(weekMonday + 'T00:00:00');
+      const dayOffset = (dow === 0 ? 6 : dow - 1);
+      const date = new Date(weekStart); date.setDate(weekStart.getDate() + dayOffset);
+      dateKey = localISODate(date);
+    }
     const mins = SCHEDULE[dow] ? 45 : 60;
     if (!daysByDate[dateKey]) daysByDate[dateKey] = { training: SCHEDULE[dow], exercises: [] };
     daysByDate[dateKey].exercises.push({ isCardio: true, cardioDone: true, mins });
@@ -1303,18 +1390,14 @@ function checkProgressionFromData(ex, wData, maxRep) {
 }
 
 // Guia de carga: lista todos exercícios com carga registrada na semana mais recente
-function buildLoadGuide(wData) {
-  const items = [];
-  Object.values(TREINOS).forEach(data => {
-    data.exercises.forEach(ex => {
-      const kg = getReferenceLoad(ex, wData);
-      if (kg === null) return;
-      const maxRep = parseInt((ex.reps.split('–')[1]||ex.reps).toString().trim());
-      const up = checkProgressionFromData(ex, wData, maxRep);
-      items.push({ name: ex.name, kg, up });
-    });
-  });
-  return items;
+function toggleGuide(t) {
+  const row = document.getElementById('guide_'+t);
+  const body = document.getElementById('guidebody_'+t);
+  if (!body) return; // no data — nothing to expand
+  const isOpen = row.classList.contains('open');
+  // Close all guide rows
+  document.querySelectorAll('.guide-treino-row.open').forEach(r => r.classList.remove('open'));
+  if (!isOpen) row.classList.add('open');
 }
 
 function closeHistory() { document.getElementById('histModal').classList.remove('open'); }
